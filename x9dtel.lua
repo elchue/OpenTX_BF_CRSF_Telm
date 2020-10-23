@@ -2,7 +2,7 @@
 	OpenTX Telemetry GUI for FrSky Taranis X9D+ SE 2019
 	include TBS Crossfire Telemetry
 	
-	elchue (2020)
+	Rolf Wirtz (rolf.wirtz@gmail.com)
 --]]
 
 -- settings
@@ -12,11 +12,13 @@ local cellNomV	= 4.35 -- Nominal Voltage for detecting cell count
 
 -- globals
 -- FrSky Taranis X9D+ SE 2019 Display
-local diaplyWidth	= 212 
+local displayWidth	= 212 
 local displayHight	= 64
+local popupMenu		= 0
 local cellCountTX	= 0
 local cellCountRX	= 0
 local modelName		= "unknown"
+local lastValidGPS
 
 local function calcCellCount(value)
 	local cells = ((value - (value % cellNomV)) / cellNomV) + 1
@@ -49,7 +51,7 @@ end
 
 local function drawRXVolt(pos_x, pos_y)
 	local value = getValue('RxBt')
-	lcd.drawText(pos_x, pos_y, string.format("%5.2f", value) .. "V", MIDSIZE)
+	lcd.drawText(pos_x, pos_y, string.format("%5.2f", value) .. "V " .. cellCountRX .. "S", MIDSIZE)
 end
 
 local function drawRXBatteryGraph(pos_x, pos_y)
@@ -85,6 +87,10 @@ local function drawRXBatteryGraph(pos_x, pos_y)
 end
 
 local function drawRXBatCap(pos_x, pos_y)
+	--   12mAh
+	--  999mAh
+	--  1.20Ah
+	-- 99.99Ah
 	local valueCurr = getValue('Curr') 
 	local valueCapa = getValue('Capa')
 	local lblCapa = 0
@@ -103,8 +109,16 @@ local function drawRXBatCap(pos_x, pos_y)
 end
 
 local function drawRSSI(pos_x, pos_y)
+	local value
 	--local value = getRSSI()
-	local value = getValue('1RSS')
+	local rssi1 = getValue('1RSS')
+	local rssi2 = getValue('2RSS')
+	if rssi1 >= rssi2 then
+		value = rssi1
+	else
+		value = rssi2
+	end
+	--local value = 100 -- (dbg)
 	lcd.drawText(pos_x, pos_y, "RSSI " .. string.format("%3d", value) .. "dB", MIDSIZE)
 end
 
@@ -148,8 +162,14 @@ end
 local function drawGPSCoord(pos_x, pos_y)
 	local value = getValue('GPS')
 	if type(value) == "table" then
+		lastValidGPS = value
 		lcd.drawText(pos_x, pos_y, "Lat " .. string.format("%09.6f", value.lat) .. "N")
 		lcd.drawText(pos_x, pos_y + 8, "Lon " .. string.format("%09.6f", value.lon) .. "E")
+	elseif type(lastValidGPS) == "table" then
+		lcd.drawText(pos_x, pos_y, "Lat " .. string.format("%09.6f", lastValidGPS.lat) .. "N")
+		lcd.drawText(pos_x, pos_y + 8, "Lon " .. string.format("%09.6f", lastValidGPS.lon) .. "E")
+		lcd.drawText(pos_x + 72, pos_y, "GPS", BLINK)
+		lcd.drawText(pos_x + 72, pos_y + 8, "Lost", BLINK)
 	else
 		lcd.drawText(pos_x, pos_y, "NO GPS", MIDSIZE)
 	end
@@ -164,14 +184,24 @@ local function drawModel(pos_x, pos_y)
 	lcd.drawText(pos_x, pos_y, modelName, SMLSIZE)
 end
 
-local function resetConfig() -- not in use
-	cellCountTX = 0
+
+local function resetConfig()
 	cellCountRX = 0
 end
 
+local function drawPopupMenu()
+	local popupSizeW = 160
+	local popupSizeH = 35
+	lcd.drawFilledRectangle((displayWidth / 2) - (popupSizeW / 2), (displayHight / 2) - (popupSizeH / 2), popupSizeW, popupSizeH, ERASE)
+	lcd.drawRectangle((displayWidth / 2) - (popupSizeW / 2) + 1, (displayHight / 2) - (popupSizeH / 2) + 1, popupSizeW - 2, popupSizeH - 2, SOLID)
+	lcd.drawText((displayWidth / 2) - (popupSizeW / 2) + 40, (displayHight / 2) - (popupSizeH / 2) + 6, "Reset Script...?")
+	lcd.drawText((displayWidth / 2) - (popupSizeW / 2) + 20, (displayHight / 2) - (popupSizeH / 2) + 20, "[EXIT] NO    [ENTER] YES")
+end
+
+
 local function run(event)
 	lcd.clear()
-	lcd.drawLine(0, 7, diaplyWidth, 7, SOLID, FORCE)
+	lcd.drawLine(0, 7, displayWidth, 7, SOLID, FORCE)
 	drawTXBattery(0, 0)
 	drawModel(50, 0)
 	drawTime(188,0)
@@ -185,6 +215,18 @@ local function run(event)
 	
 	drawGPSInfo(47, 42)
 	drawGPSCoord(115, 47)
+	
+	if popupMenu == 1 then
+		drawPopupMenu()
+		if event == EVT_ENTER_BREAK then
+			resetConfig()
+			popupMenu = 0
+		elseif event == EVT_EXIT_BREAK then
+			popupMenu = 0
+		end	
+	elseif event == EVT_ENTER_BREAK then
+		popupMenu = 1
+	end
 	
 	return 0
 end

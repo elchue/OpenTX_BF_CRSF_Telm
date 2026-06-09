@@ -1,8 +1,6 @@
 --[[
 	OpenTX Telemetry GUI for FrSky Taranis X9D+ SE 2019
 	include TBS Crossfire Telemetry
-	
-	
 --]]
 
 -- settings
